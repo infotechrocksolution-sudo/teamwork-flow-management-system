@@ -48,6 +48,31 @@ $members = [
  'masud'=>['name'=>'Masud','role'=>'Security head']
 ];
 $action=$_GET['action'] ?? '';
+if ($action==='health' && $_SERVER['REQUEST_METHOD']==='GET') {
+  $result=['ok'=>true,'php'=>true,'database'=>false,'table'=>false,'message'=>'PHP API is running.'];
+  $configFile=__DIR__.'/config.php';
+  if (!is_file($configFile)) {
+    $result['ok']=false;
+    $result['message']='PHP API is running, but config.php is missing. Copy config.example.php to config.php on the Hostinger server and enter the database credentials.';
+    out($result,503);
+  }
+  try {
+    $pdo=db();
+    $check=$pdo->query("SHOW TABLES LIKE 'tfms_app_state'")->fetchColumn();
+    $result['database']=true;
+    $result['table']=(bool)$check;
+    if (!$result['table']) {
+      $result['ok']=false;
+      $result['message']='Database connection works, but tfms_app_state is missing. Import database.sql into the selected database.';
+      out($result,503);
+    }
+    $result['message']='PHP API and database are reachable.';
+    out($result);
+  } catch (Throwable $e) {
+    error_log('TFMS health check error: '.$e->getMessage());
+    out(['ok'=>false,'php'=>true,'database'=>false,'table'=>false,'message'=>'PHP API is running, but database connection/check failed. Verify config.php and database setup.'],503);
+  }
+}
 if ($action==='login' && $_SERVER['REQUEST_METHOD']==='POST') {
   $input=json_decode(file_get_contents('php://input') ?: '',true);
   $name=strtolower(trim((string)($input['name'] ?? '')));
