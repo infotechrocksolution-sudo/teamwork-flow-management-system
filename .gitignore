@@ -1,0 +1,4 @@
+# Hostinger secrets and local configuration
+/config.php
+/tfms-shared-data.json
+/tfms-shared-data.json.tmp
