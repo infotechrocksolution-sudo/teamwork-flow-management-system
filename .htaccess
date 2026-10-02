@@ -1,7 +1,4 @@
-# Protect the server-side shared task store from direct HTTP access.
-<Files "tfms-shared-data.json">
+Options -Indexes
+<FilesMatch "^(config\.php|database\.sql|README\.md)$">
   Require all denied
-</Files>
-<Files "tfms-shared-data.json.tmp">
-  Require all denied
-</Files>
+</FilesMatch>
