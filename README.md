@@ -6,6 +6,22 @@ Responsive browser-based workflow dashboard for Sadi, Tanvir, Shevik and Masud.
 
 The app uses a PHP API and a MySQL/MariaDB table for shared state. Tasks and daily updates are stored centrally so team members can use different browsers, phones and computers and see updates on the next sync poll (approximately every 5 seconds).
 
+### Troubleshooting login and API responses
+
+After uploading the latest files, open this URL in the same browser and domain as the app:
+
+`https://YOUR-SUBDOMAIN/api.php?action=health`
+
+It should display JSON (plain text beginning with `{"ok":true`). The health check reports whether PHP is executing, whether the database connection works, and whether the `tfms_app_state` table exists. It does not expose database credentials.
+
+- If the URL displays an HTML page, a 404, or your hosting provider's error page instead of JSON, the request is not reaching the PHP API correctly. Confirm `api.php` is uploaded beside `index.html` in the subdomain's actual document root, PHP is enabled, and the URL is using the correct domain/path.
+- If it reports that `config.php` is missing, create that file on the server from `config.example.php`.
+- If it reports a database connection failure, recheck the database host/name/user/password in `config.php`.
+- If it reports that `tfms_app_state` is missing, select the correct database in phpMyAdmin and run `database.sql`.
+- Then test login with a demo member name (Sadi, Tanvir, Shevik or Masud) and password `1234`.
+
+The demo login endpoint itself does not need a database connection, but loading shared tasks does. If login requests return HTML rather than JSON, this usually indicates a wrong/missing API path, a PHP execution/configuration problem, or a server-side error page—not an incorrect password.
+
 ### Hostinger deployment files
 
 Upload these files into the same document root for your subdomain:
