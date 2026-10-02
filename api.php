@@ -31,11 +31,11 @@ function db(): PDO {
   return $pdo;
 }
 function read_state(PDO $pdo): array {
-  $stmt=$pdo->query('SELECT state_json FROM tfms_app_state WHERE state_id=1');
+  $stmt=$pdo->query('SELECT state_json, updated_by FROM tfms_app_state WHERE state_id=1');
   $row=$stmt->fetch();
-  if (!$row) return ['tasks'=>[],'standups'=>[],'notes'=>[]];
+  if (!$row) return ['data'=>['tasks'=>[],'standups'=>[],'notes'=>[]], 'initialized'=>false];
   $state=json_decode((string)$row['state_json'], true);
-  return is_array($state) ? $state : ['tasks'=>[],'standups'=>[],'notes'=>[]];
+  return ['data'=>is_array($state) ? $state : ['tasks'=>[],'standups'=>[],'notes'=>[]], 'initialized'=>($row['updated_by'] ?? 'system') !== 'system'];
 }
 function signed_in(): array {
   if (empty($_SESSION['tfms_user'])) out(['ok'=>false,'error'=>'Please sign in again.'],401);
@@ -65,7 +65,7 @@ if ($action==='logout' && $_SERVER['REQUEST_METHOD']==='POST') {
 }
 if ($action==='load' && $_SERVER['REQUEST_METHOD']==='GET') {
   signed_in();
-  try { out(['ok'=>true,'data'=>read_state(db())]); }
+  try { $state=read_state(db()); out(['ok'=>true,'data'=>$state['data'],'initialized'=>$state['initialized']]); }
   catch (Throwable $e) { error_log('TFMS load error: '.$e->getMessage()); out(['ok'=>false,'error'=>'Unable to load shared database data.'],500); }
 }
 if ($action==='save' && $_SERVER['REQUEST_METHOD']==='POST') {
