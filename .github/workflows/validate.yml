@@ -1,0 +1,27 @@
+name: Validate app source
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Check PHP syntax
+        run: php -l api.php
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check inline JavaScript syntax
+        run: |
+          node --input-type=commonjs -e "const fs=require('fs');const html=fs.readFileSync('index.html','utf8');const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];if(!scripts.length)throw new Error('No inline script found');for(const [i,s] of scripts.entries()){new Function(s[1]);console.log('Inline script '+(i+1)+' syntax OK')}"
