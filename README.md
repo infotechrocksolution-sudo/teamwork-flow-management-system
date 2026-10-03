@@ -55,8 +55,11 @@ Shevik is the configured Super Admin. Shevik can add, edit, reorder and remove r
 
 ## Permissions
 - All four team members can create/edit tasks and change task status.
-- Only Tanvir and Shevik can delete tasks.
+- Only Tanvir and Shevik can delete tasks or clear the entire task list.
 - Only Tanvir and Shevik can change a task from `Done` back to `In progress`.
+
+## Workspace tools
+Tanvir and Shevik can use **Reset Task** to clear all tasks after confirmation. Any member can use **Get Demo Task** to restore missing starter tasks without removing custom tasks. The PHP API also enforces the task-deletion permission for shared state.
 
 ## Important limitations
 This remains a prototype. The four demo accounts share the password `1234`, and app state is stored as one JSON document in MySQL. The API uses optimistic concurrency control and a client-side three-way merge to reduce lost updates. If both members change the same field at once, the server value is kept in the live view and the local snapshot is preserved in browser storage under `tfms-conflict-backup` for recovery. The four demo accounts still share the password `1234`; this remains a prototype and must not be used for confidential or business-critical data until individual accounts, stronger authentication, CSRF protections, audit logging, backups and a full multi-device acceptance test are completed.
