@@ -52,7 +52,7 @@ function db(): PDO {
   }
   return $pdo;
 }
-function empty_state(): array { return ['tasks'=>[],'standups'=>[],'notes'=>[]]; }
+function empty_state(): array { return ['tasks'=>[],'standups'=>[],'notes'=>[],'roadmap'=>[]]; }
 function read_state(PDO $pdo): array {
   $stmt=$pdo->query('SELECT state_json, updated_by, version FROM tfms_app_state WHERE state_id=1');
   $row=$stmt->fetch();
@@ -138,6 +138,12 @@ if ($action==='save' && $_SERVER['REQUEST_METHOD']==='POST') {
     if ($baseVersion !== null && $baseVersion !== $currentVersion) {
       $pdo->rollBack();
       out(['ok'=>false,'conflict'=>true,'error'=>'Shared data changed on another device. The latest data has been returned for a safe merge.','version'=>$currentVersion,'data'=>$current],409);
+    }
+    $incoming['roadmap']=is_array($incoming['roadmap'] ?? null) ? $incoming['roadmap'] : ($current['roadmap'] ?? []);
+    $roadmapChanged=json_encode($incoming['roadmap']) !== json_encode($current['roadmap'] ?? []);
+    if ($row && array_key_exists('roadmap',$current) && $roadmapChanged && $user['name'] !== 'Shevik') {
+      $pdo->rollBack();
+      out(['ok'=>false,'error'=>'Only the Super Admin can edit roadmap milestones.'],403);
     }
     $old=[]; $new=[];
     foreach (($current['tasks'] ?? []) as $task) if (isset($task['id'])) $old[(string)$task['id']]=$task;

@@ -45,6 +45,8 @@ Upload these files into the same document root for your subdomain:
 
 The first successful save stores the app's initial task list in the database. Do not delete the database table after team members begin using the app.
 
+## Roadmap administration
+Shevik is the configured Super Admin. Shevik can add, edit, reorder and remove roadmap milestones, including each milestone’s day range, owner and description. Roadmap edits are stored with the shared PHP/MySQL state; the API checks the Super Admin permission before accepting changes.
 ## Demo sign-ins
 - Sadi / `1234`
 - Tanvir / `1234`
