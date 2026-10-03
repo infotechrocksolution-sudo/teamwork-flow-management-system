@@ -2,8 +2,22 @@
 declare(strict_types=1);
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
-ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.cookie_samesite', 'None');
 if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ini_set('session.cookie_secure', '1');
+// GitHub Pages frontend -> PHP API requires credentialed CORS.
+$allowedOrigin = 'https://infotechrocksolution-sudo.github.io';
+$requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($requestOrigin === $allowedOrigin) {
+  header('Access-Control-Allow-Origin: '.$allowedOrigin);
+  header('Access-Control-Allow-Credentials: true');
+  header('Vary: Origin');
+  header('Access-Control-Allow-Headers: Content-Type');
+  header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+}
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+  if ($requestOrigin !== $allowedOrigin) { http_response_code(403); exit; }
+  http_response_code(204); exit;
+}
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
