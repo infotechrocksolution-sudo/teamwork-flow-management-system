@@ -21,15 +21,22 @@ A lightweight, browser-based prototype for a four-person team coordinating a 30-
 - Team ownership and workload view
 - Daily stand-up updates (yesterday, today, blockers)
 - CSV exports for tasks and reports
-- Browser-local persistence via `localStorage`
+- Task and update persistence shared across all four demo logins in the same browser profile
+- Automatic updates in other open tabs in the same browser profile
+- Demo login stays active across page refreshes until you log out
 - Responsive desktop/mobile layout
 - GitHub Pages workflow file under `.github/workflows/deploy.yml`
+
+## Task permissions
+- All four members can create and edit tasks and change task status.
+- Only Tanvir and Shevik can delete tasks, regardless of task status.
+- Only Tanvir and Shevik can change a task from **Done** back to **In progress**.
 
 ## Important limitations — read before publishing
 This is a **front-end prototype**, not a production multi-user SaaS yet.
 
 - The four usernames and shared password are embedded in browser JavaScript. Anyone can inspect the source and bypass this login. It is suitable only for a private demo with fake data.
-- Data is saved in the current browser only. The four users do **not** share synchronized tasks or reports across devices.
+- Data is saved in the current browser profile and shared across the four demo logins there. Separate browsers or devices do **not** share data; configure the PHP/MySQL backend for cross-device sync.
 - There is no server-side authentication, database, tenant isolation, audit log, or authorization enforcement.
 - GitHub Pages is static hosting; it does not make this client-side login secure.
 
