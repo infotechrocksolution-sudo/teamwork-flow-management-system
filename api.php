@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 
 function out(array $body, int $status=200): never {
   http_response_code($status);
@@ -24,18 +25,26 @@ function db(): PDO {
       $cfg['db_pass'],
       [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES=>false]
     );
+    // Backward-compatible migration for installations created before optimistic sync versions.
+    $column = $pdo->query("SHOW COLUMNS FROM tfms_app_state LIKE 'version'")->fetch();
+    if (!$column) $pdo->exec('ALTER TABLE tfms_app_state ADD COLUMN version BIGINT UNSIGNED NOT NULL DEFAULT 0');
   } catch (Throwable $e) {
-    error_log('TFMS database connection error: '.$e->getMessage());
-    out(['ok'=>false,'error'=>'Could not connect to the database. Check config.php and database.sql setup.'], 503);
+    error_log('TFMS database connection/migration error: '.$e->getMessage());
+    out(['ok'=>false,'error'=>'Could not connect to or prepare the database. Check config.php and database.sql setup.'], 503);
   }
   return $pdo;
 }
+function empty_state(): array { return ['tasks'=>[],'standups'=>[],'notes'=>[]]; }
 function read_state(PDO $pdo): array {
-  $stmt=$pdo->query('SELECT state_json, updated_by FROM tfms_app_state WHERE state_id=1');
+  $stmt=$pdo->query('SELECT state_json, updated_by, version FROM tfms_app_state WHERE state_id=1');
   $row=$stmt->fetch();
-  if (!$row) return ['data'=>['tasks'=>[],'standups'=>[],'notes'=>[]], 'initialized'=>false];
+  if (!$row) return ['data'=>empty_state(), 'initialized'=>false, 'version'=>0];
   $state=json_decode((string)$row['state_json'], true);
-  return ['data'=>is_array($state) ? $state : ['tasks'=>[],'standups'=>[],'notes'=>[]], 'initialized'=>($row['updated_by'] ?? 'system') !== 'system'];
+  return [
+    'data'=>is_array($state) ? $state : empty_state(),
+    'initialized'=>($row['updated_by'] ?? 'system') !== 'system',
+    'version'=>(int)($row['version'] ?? 0)
+  ];
 }
 function signed_in(): array {
   if (empty($_SESSION['tfms_user'])) out(['ok'=>false,'error'=>'Please sign in again.'],401);
@@ -49,11 +58,10 @@ $members = [
 ];
 $action=$_GET['action'] ?? '';
 if ($action==='health' && $_SERVER['REQUEST_METHOD']==='GET') {
-  $result=['ok'=>true,'php'=>true,'database'=>false,'table'=>false,'message'=>'PHP API is running.'];
-  $configFile=__DIR__.'/config.php';
-  if (!is_file($configFile)) {
+  $result=['ok'=>true,'php'=>true,'database'=>false,'table'=>false,'versioning'=>false,'message'=>'PHP API is running.'];
+  if (!is_file(__DIR__.'/config.php')) {
     $result['ok']=false;
-    $result['message']='PHP API is running, but config.php is missing. Copy config.example.php to config.php on the Hostinger server and enter the database credentials.';
+    $result['message']='PHP API is running, but config.php is missing. Create the server-only config.php from config.example.php.';
     out($result,503);
   }
   try {
@@ -61,16 +69,17 @@ if ($action==='health' && $_SERVER['REQUEST_METHOD']==='GET') {
     $check=$pdo->query("SHOW TABLES LIKE 'tfms_app_state'")->fetchColumn();
     $result['database']=true;
     $result['table']=(bool)$check;
-    if (!$result['table']) {
+    $result['versioning']=(bool)$pdo->query("SHOW COLUMNS FROM tfms_app_state LIKE 'version'")->fetch();
+    if (!$result['table'] || !$result['versioning']) {
       $result['ok']=false;
-      $result['message']='Database connection works, but tfms_app_state is missing. Import database.sql into the selected database.';
+      $result['message']='Database table or sync-version column is missing. Check database.sql and database permissions.';
       out($result,503);
     }
-    $result['message']='PHP API and database are reachable.';
+    $result['message']='PHP API, database and optimistic sync versioning are reachable.';
     out($result);
   } catch (Throwable $e) {
     error_log('TFMS health check error: '.$e->getMessage());
-    out(['ok'=>false,'php'=>true,'database'=>false,'table'=>false,'message'=>'PHP API is running, but database connection/check failed. Verify config.php and database setup.'],503);
+    out(['ok'=>false,'php'=>true,'database'=>false,'table'=>false,'versioning'=>false,'message'=>'PHP API is running, but database connection/check failed. Verify config.php and database setup.'],503);
   }
 }
 if ($action==='login' && $_SERVER['REQUEST_METHOD']==='POST') {
@@ -90,19 +99,28 @@ if ($action==='logout' && $_SERVER['REQUEST_METHOD']==='POST') {
 }
 if ($action==='load' && $_SERVER['REQUEST_METHOD']==='GET') {
   signed_in();
-  try { $state=read_state(db()); out(['ok'=>true,'data'=>$state['data'],'initialized'=>$state['initialized']]); }
+  try { $state=read_state(db()); out(['ok'=>true,'data'=>$state['data'],'initialized'=>$state['initialized'],'version'=>$state['version']]); }
   catch (Throwable $e) { error_log('TFMS load error: '.$e->getMessage()); out(['ok'=>false,'error'=>'Unable to load shared database data.'],500); }
 }
 if ($action==='save' && $_SERVER['REQUEST_METHOD']==='POST') {
   $user=signed_in();
-  $incoming=json_decode(file_get_contents('php://input') ?: '',true);
+  $payload=json_decode(file_get_contents('php://input') ?: '',true);
+  // Accept the old raw-state format for one-time compatibility with older clients.
+  $incoming=is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
+  $baseVersion=array_key_exists('baseVersion',$payload ?? []) ? (int)$payload['baseVersion'] : null;
   if (!is_array($incoming) || !isset($incoming['tasks']) || !is_array($incoming['tasks'])) out(['ok'=>false,'error'=>'Invalid task data.'],400);
   $pdo=db();
   try {
     $pdo->beginTransaction();
-    $stmt=$pdo->query('SELECT state_json FROM tfms_app_state WHERE state_id=1 FOR UPDATE');
+    $stmt=$pdo->query('SELECT state_json, updated_by, version FROM tfms_app_state WHERE state_id=1 FOR UPDATE');
     $row=$stmt->fetch();
-    $current=$row ? (json_decode((string)$row['state_json'],true) ?: ['tasks'=>[],'standups'=>[],'notes'=>[]]) : ['tasks'=>[],'standups'=>[],'notes'=>[]];
+    $current=$row ? (json_decode((string)$row['state_json'],true) ?: empty_state()) : empty_state();
+    $currentVersion=(int)($row['version'] ?? 0);
+    // Versioned clients must reload/merge when another member saved first.
+    if ($baseVersion !== null && $baseVersion !== $currentVersion) {
+      $pdo->rollBack();
+      out(['ok'=>false,'conflict'=>true,'error'=>'Shared data changed on another device. The latest data has been returned for a safe merge.','version'=>$currentVersion,'data'=>$current],409);
+    }
     $old=[]; $new=[];
     foreach (($current['tasks'] ?? []) as $task) if (isset($task['id'])) $old[(string)$task['id']]=$task;
     foreach ($incoming['tasks'] as $task) if (isset($task['id'])) $new[(string)$task['id']]=$task;
@@ -115,10 +133,16 @@ if ($action==='save' && $_SERVER['REQUEST_METHOD']==='POST') {
     $incoming['notes']=is_array($incoming['notes'] ?? null) ? $incoming['notes'] : ($current['notes'] ?? []);
     $json=json_encode($incoming,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     if ($json===false) { $pdo->rollBack(); out(['ok'=>false,'error'=>'Could not encode data.'],400); }
-    $upsert=$pdo->prepare('INSERT INTO tfms_app_state (state_id,state_json,updated_by) VALUES (1,:state,:user) ON DUPLICATE KEY UPDATE state_json=VALUES(state_json), updated_by=VALUES(updated_by)');
-    $upsert->execute(['state'=>$json,'user'=>$user['name']]);
+    if ($row) {
+      $upsert=$pdo->prepare('UPDATE tfms_app_state SET state_json=:state, updated_by=:user, version=version+1 WHERE state_id=1');
+      $upsert->execute(['state'=>$json,'user'=>$user['name']]);
+    } else {
+      $upsert=$pdo->prepare('INSERT INTO tfms_app_state (state_id,state_json,updated_by,version) VALUES (1,:state,:user,1)');
+      $upsert->execute(['state'=>$json,'user'=>$user['name']]);
+    }
+    $newVersion=$currentVersion+1;
     $pdo->commit();
-    out(['ok'=>true]);
+    out(['ok'=>true,'version'=>$newVersion]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     error_log('TFMS save error: '.$e->getMessage());
