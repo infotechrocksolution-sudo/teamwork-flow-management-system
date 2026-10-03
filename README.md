@@ -4,7 +4,7 @@ Responsive browser-based workflow dashboard for Sadi, Tanvir, Shevik and Masud.
 
 ## Centralized database backend
 
-The app uses a PHP API and a MySQL/MariaDB table for shared state. Tasks and daily updates are stored centrally so team members can use different browsers, phones and computers and see updates on the next sync poll (approximately every 5 seconds).
+The app uses a PHP API and a MySQL/MariaDB table for shared state. Tasks and daily updates are stored centrally so team members can use different browsers, phones and computers and see updates on the next sync poll (approximately every 5 seconds). Saves use optimistic version checks and a three-way merge to prevent stale screens from silently replacing a teammate’s latest data. Overlapping edits are preserved in a device-local recovery backup (`tfms-conflict-backup`) and the server version wins for fields changed by both users.
 
 ### Troubleshooting login and API responses
 
@@ -20,7 +20,7 @@ It should display JSON (plain text beginning with `{"ok":true`). The health chec
 - If it reports that `tfms_app_state` is missing, select the correct database in phpMyAdmin and run `database.sql`.
 - Then test login with a demo member name (Sadi, Tanvir, Shevik or Masud) and password `1234`.
 
-The demo login endpoint itself does not need a database connection, but loading shared tasks does. If login requests return HTML rather than JSON, this usually indicates a wrong/missing API path, a PHP execution/configuration problem, or a server-side error page—not an incorrect password.
+The demo login endpoint itself does not need a database connection, but loading shared tasks does. The API health response also checks that optimistic sync versioning is available; older database tables are upgraded automatically when the database user has ALTER TABLE permission. If login requests return HTML rather than JSON, this usually indicates a wrong/missing API path, a PHP execution/configuration problem, or a server-side error page—not an incorrect password.
 
 ### Hostinger deployment files
 
@@ -51,4 +51,4 @@ The first successful save stores the app's initial task list in the database. Do
 - Only Tanvir and Shevik can change a task from `Done` back to `In progress`.
 
 ## Important limitations
-This remains a prototype. The four demo accounts share the password `1234`, and app state is stored as one JSON document in MySQL. The API serializes writes, but simultaneous edits can still overwrite one another if users save from stale screens. Before confidential or business-critical use, replace demo authentication with individually managed accounts, use a normalized relational schema, add CSRF protections and audit logging, and test backups and permissions.
+This remains a prototype. The four demo accounts share the password `1234`, and app state is stored as one JSON document in MySQL. The API uses optimistic concurrency control and a client-side three-way merge to reduce lost updates. If both members change the same field at once, the server value is kept in the live view and the local snapshot is preserved in browser storage under `tfms-conflict-backup` for recovery. The four demo accounts still share the password `1234`; this remains a prototype and must not be used for confidential or business-critical data until individual accounts, stronger authentication, CSRF protections, audit logging, backups and a full multi-device acceptance test are completed.
