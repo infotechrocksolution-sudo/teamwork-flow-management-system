@@ -95,24 +95,31 @@ function flushServerSave(){
 }
 function save(){localStorage.setItem("tfms-data",JSON.stringify(data));localRevision++;scheduleServerSave()}
 async function syncFromServer(seed=true){
- if(syncBusy||!serverReady&&localRevision>lastSyncedRevision)return;
- if(localRevision>lastSyncedRevision||saveTimer||localRevision!==lastSyncedRevision)return;
+ if(syncBusy)return;
  syncBusy=true;const revisionAtStart=localRevision;
  try{
   const r=await fetch("api.php?action=load",{credentials:"same-origin",cache:"no-store"});
   const v=await readApiJson(r,"load");if(!r.ok||!v.ok)throw new Error(v.error||"Sync failed");
+  const remote=cloneState(v.data||{tasks:[],standups:[],notes:[]});
   serverVersion=Number(v.version||0);
-  if(v.initialized&&v.data&&Array.isArray(v.data.tasks)){
-   if(localRevision===revisionAtStart){data=v.data;baseData=cloneState(v.data);localStorage.setItem("tfms-data",JSON.stringify(data));if(currentUser)renderPage()}
-  }else if(seed){
+  if(v.initialized&&Array.isArray(remote.tasks)){
+   if(localRevision===lastSyncedRevision){
+    data=remote;baseData=cloneState(remote);localStorage.setItem("tfms-data",JSON.stringify(data));if(currentUser)renderPage()
+   }else{
+    const merged=mergeStates(baseData||remote,data,remote);
+    if(merged.conflicts.length)localStorage.setItem("tfms-conflict-backup",JSON.stringify({savedAt:new Date().toISOString(),local:cloneState(data),server:remote,conflicts:merged.conflicts}));
+    data=merged.data;baseData=cloneState(remote);localStorage.setItem("tfms-data",JSON.stringify(data));
+    if(currentUser)renderPage();
+   }
+  }else if(seed&&localRevision===lastSyncedRevision){
    const initial=cloneState(data),sr=await fetch("api.php?action=save",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({data:initial,baseVersion:serverVersion,baseData:initial})});
    const sv=await readApiJson(sr,"initial save");if(!sr.ok||!sv.ok)throw new Error(sv.error||"Could not initialize shared database data");
    serverVersion=Number(sv.version||serverVersion+1);baseData=cloneState(initial);lastSyncedRevision=localRevision;
-  }
+  }else if(seed){baseData=cloneState(remote)}
   serverReady=true;if(localRevision>lastSyncedRevision)scheduleServerSave()
- }catch(e){serverReady=false;console.error("Shared sync failed",e);toast("Shared sync unavailable. Local changes are retained.")}
+ }catch(e){serverReady=false;console.error("Shared sync failed",e);toast("Shared sync unavailable. Local changes are retained; retrying automatically.")}
  finally{syncBusy=false}
-}function enterApp(member){serverReady=false;syncBusy=false;serverVersion=0;baseData=null;lastSyncedRevision=localRevision;currentUser=member;document.getElementById("loginScreen").classList.add("hidden");document.getElementById("appScreen").classList.remove("hidden");document.getElementById("userName").textContent=member.name;document.getElementById("userRole").textContent=member.role;document.getElementById("userAvatar").textContent=initials(member.name);document.getElementById("todayLabel").textContent=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});setPage("dashboard");syncFromServer();if(syncTimer)clearInterval(syncTimer);syncTimer=setInterval(()=>{if(serverReady&&localRevision===lastSyncedRevision&&!saveTimer)syncFromServer(false)},5000)}
+}function enterApp(member){serverReady=false;syncBusy=false;serverVersion=0;baseData=null;lastSyncedRevision=localRevision;currentUser=member;document.getElementById("loginScreen").classList.add("hidden");document.getElementById("appScreen").classList.remove("hidden");document.getElementById("userName").textContent=member.name;document.getElementById("userRole").textContent=member.role;document.getElementById("userAvatar").textContent=initials(member.name);document.getElementById("todayLabel").textContent=new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});setPage("dashboard");syncFromServer();if(syncTimer)clearInterval(syncTimer);syncTimer=setInterval(()=>{if(!syncBusy&&(!serverReady||(localRevision===lastSyncedRevision&&!saveTimer)))syncFromServer(false)},5000)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function initials(s){return s.split(" ").map(x=>x[0]).join("").toUpperCase()}
 function toast(s){const r=document.getElementById("toastRoot");r.innerHTML='<div class="toast">'+esc(s)+'</div>';setTimeout(()=>r.innerHTML="",2400)}
