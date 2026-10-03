@@ -24,13 +24,14 @@ A lightweight, browser-based prototype for a four-person team coordinating a 30-
 - Task and update persistence shared across all four demo logins in the same browser profile
 - Automatic updates in other open tabs in the same browser profile
 - Demo login stays active across page refreshes until you log out
+- Workspace tools can clear all tasks (Tanvir and Shevik only) or restore any missing starter demo tasks
 - Super Admin can add, edit, reorder, and remove roadmap milestones
 - Responsive desktop/mobile layout
 - GitHub Pages workflow file under `.github/workflows/deploy.yml`
 
 ## Task permissions
 - All four members can create and edit tasks and change task status.
-- Only Tanvir and Shevik can delete tasks, regardless of task status.
+- Only Tanvir and Shevik can delete tasks, regardless of task status, or clear the entire task list.
 - Only Tanvir and Shevik can change a task from **Done** back to **In progress**.
 - Shevik is the configured Super Admin and can manage roadmap milestones.
 
