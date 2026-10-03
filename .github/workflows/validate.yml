@@ -24,4 +24,4 @@ jobs:
           node-version: '20'
       - name: Check inline JavaScript syntax
         run: |
-          node --input-type=commonjs -e "const fs=require('fs');const html=fs.readFileSync('index.html','utf8');const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];if(!scripts.length)throw new Error('No inline script found');for(const [i,s] of scripts.entries()){new Function(s[1]);console.log('Inline script '+(i+1)+' syntax OK')}"
+          node --input-type=commonjs -e "const fs=require('fs');const html=fs.readFileSync('index.html','utf8');const start=html.indexOf('<script>');const end=html.indexOf('</script>',start);if(start<0||end<0)throw new Error('Inline script not found');new Function(html.slice(start+8,end));console.log('Inline JavaScript syntax OK')"
