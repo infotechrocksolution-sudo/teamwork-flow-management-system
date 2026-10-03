@@ -6,6 +6,12 @@ Responsive browser-based workflow dashboard for Sadi, Tanvir, Shevik and Masud.
 
 The app uses a PHP API and a MySQL/MariaDB table for shared state. Tasks and daily updates are stored centrally so team members can use different browsers, phones and computers and see updates on the next sync poll (approximately every 5 seconds). Saves use optimistic version checks and a three-way merge to prevent stale screens from silently replacing a teammate’s latest data. Overlapping edits are preserved in a device-local recovery backup (`tfms-conflict-backup`) and the server version wins for fields changed by both users.
 
+### GitHub Pages frontend configuration
+
+GitHub Pages cannot execute PHP. The frontend now reads its API base URL from `api-config.js`. After deploying the PHP backend, set `window.TFMS_API_BASE` to the HTTPS URL of the directory containing `api.php` (no trailing slash), then commit the change. Example: `https://api.example.com/teamwork-flow`.
+
+The API currently allows credentialed CORS requests only from `https://infotechrocksolution-sudo.github.io` and uses Secure, HttpOnly, SameSite=None session cookies for cross-origin requests. The backend must be served over HTTPS. Browser third-party-cookie restrictions can still block PHP session cookies when the frontend remains on the separate `github.io` site; if that occurs, use a custom frontend domain under the same site as the API or a same-site reverse proxy. Do not place database credentials in `api-config.js` or any frontend file.
+
 ### Troubleshooting login and API responses
 
 After uploading the latest files, open this URL in the same browser and domain as the app:
